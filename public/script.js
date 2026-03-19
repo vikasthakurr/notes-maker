@@ -172,6 +172,7 @@ mermaid.initialize({
   theme: localStorage.getItem("theme") === "light" ? "default" : "dark",
   securityLevel: "loose",
   fontFamily: "Inter, sans-serif",
+  logLevel: 'error'
 });
 
 // ==================== Render Markdown ====================
@@ -194,10 +195,21 @@ async function renderNotes(markdown, topic) {
 
     pre.parentElement.replaceChild(diagramDiv, pre);
     try {
-      await mermaid.run({ nodes: [diagramDiv] });
+      // Attempt to render
+      await mermaid.run({ 
+        nodes: [diagramDiv],
+        suppressErrors: true 
+      });
     } catch (err) {
-      console.error("Mermaid error:", err);
-      diagramDiv.innerHTML = `<p class="text-red-400 text-xs">Diagram rendering failed</p>`;
+      console.error("Mermaid execution error:", err);
+      // Fallback: If it crashes, show the code block again so the user isn't left with nothing
+      diagramDiv.innerHTML = `
+        <div class="bg-red-900/20 border border-red-500/50 p-4 rounded-lg">
+          <p class="text-red-400 text-sm font-bold mb-2">Diagram Rendering Error</p>
+          <pre class="text-xs bg-black/50 p-2 overflow-x-auto"><code>${code.trim()}</code></pre>
+          <p class="text-gray-400 text-xs mt-2 italic">This usually happens if the AI generated invalid Mermaid syntax. Try regenerating.</p>
+        </div>
+      `;
     }
   }
 
@@ -271,6 +283,12 @@ exportPdfBtn.addEventListener("click", async () => {
     });
     pdfContainer.querySelectorAll("strong").forEach((el) => {
       el.style.color = "#3b3578";
+    });
+
+    // Fix PDF Layout: Prevent elements from being cut in half across pages
+    pdfContainer.querySelectorAll("img, p, pre, h1, h2, h3, h4, li, .mermaid-container").forEach((el) => {
+      el.style.pageBreakInside = "avoid";
+      el.style.breakInside = "avoid"; 
     });
 
     // Remove copy buttons from the PDF clone

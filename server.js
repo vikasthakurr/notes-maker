@@ -13,45 +13,91 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Note: We no longer initialize a global genAI instance as we use user-provided keys per request.
 
-function buildPrompt(topic, style) {
-  const styleInstructions = {
-    detailed: `Write comprehensive, detailed technical notes. 
-Include in-depth explanations, multiple code examples, and architecture diagrams. 
-Use a Mermaid diagram (graph TD or graph LR) and a relevant technical image.`,
+/**
+ * Planner Agent: Decides the structure of the notes.
+ */
+async function runPlannerAgent(topic, style, genAI) {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    summary: `Write a concise quick-reference summary. 
-Cover key concepts and syntax with 2-3 short code examples. 
-Include a high-level flowchart (Mermaid) and a representative image.`,
+  const prompt = `You are an expert Educational Planner Agent.
+Your job is to architect a professional, book-style technical guide for the topic: "${topic}".
+The user requested a "${style}" style.
 
-    tutorial: `Write a step-by-step tutorial. 
-Build complexity gradually with "Try it yourself" challenges. 
-Include a process diagram (sequenceDiagram) and a visual illustration.`,
-  };
+Output a JSON array of sections. Each section must be an object with the following keys:
+- "heading": The title of this section.
+- "instructions": Direct instructional constraints for the content. Emphasize:
+    1. Objective technical definitions and logic.
+    2. A practical analogy (if helpful) to explain mechanics, NOT to frame a story.
+    3. Specific code or architectural points to cover.
+- "needsImage": boolean (true if highly technical illustrations are needed).
+- "imageQuery": If needsImage is true, provide a Google search query for a technical diagram.
 
-  return `You are a world-class technical writer and architect. Your goal is to produce high-quality, human-style technical notes that are engaging, clear, and visually rich.
+STRICT TONE RULE: Avoid conversational fluff like "Welcome" or "Let's explore". Architecture must be purely informational.
+Ensure the output is valid JSON. ONLY output the array.`;
 
-**Topic: ${topic}**
+  const result = await model.generateContent(prompt);
+  let text = result.response.text().trim();
+  if (text.startsWith('\`\`\`json')) {
+    text = text.substring(7, text.length - 3).trim();
+  } else if (text.startsWith('\`\`\`')) {
+    text = text.substring(3, text.length - 3).trim();
+  }
 
-OUTPUT STRUCTURE (STRICTLY FOLLOW):
-1. Start IMMEDIATELY with a # heading containing the Topic Name. NO greetings or intros.
-2. Followed by a 2-3 sentence human-style, engaging overview.
-3. Include a relevant technical image from Unsplash: ![Conceptual Image](https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80&${topic.replace(/\s+/g, ",")})
-   (If that specific image isn't available, use a generic high-quality tech one: https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?auto=format&fit=crop&w=800&q=80)
-4. Include at least one Mermaid diagram (graph TD, graph LR, or sequenceDiagram) to visualize the architecture, data flow, or process.
-5. Then proceed to ## and ### sub-sections with technical content, human-centric explanations, and practical code examples.
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("Planner JSON parse error:", text);
+    throw new Error("Failed to parse Planner Agent output");
+  }
+}
 
-TONE & STYLE:
-- "Human-style": Professional documentation written with natural clarity and expert insight.
-- Engaging, not robotic.
-- ZERO TOLERANCE for greetings/preamble (No "Hey there", "Alright team", etc.).
-- "Story infusion": add a generic real life example so student can connect with topic effortlessly.
+/**
+ * Image Agent: Uses googlethis to search for the image based on the query.
+ * We return a proxied URL so the frontend can securely render it for PDFs.
+ */
+async function fetchRelevantImage(query) {
+  try {
+    const google = require('googlethis');
+    const images = await google.image(query, { safe: false });
 
-DIAGRAMS & IMAGES (MANDATORY):
-- Use \`\`\`mermaid blocks for diagrams.
-- CRITICAL: In Mermaid nodes, NEVER use commas, semicolons, or brackets inside [ ] or ( ) unless the entire label is in double quotes. Example: A["Node with, comma"] or B[Simple Node].
-- Use the provided Unsplash URLs for a professional tech-focused visual. NO cat images.
-- Add this CSS style to the image tag: style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); margin: 20px 0; max-width: 100%;"
-- Both MUST be present regardless of the style (Detailed/Summary/Tutorial).`;
+    if (images && images.length > 0) {
+      const url = images[0].url;
+      // Return the proxy route pointing to our own server
+      return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+    }
+  } catch (err) {
+    console.error("Image Agent Error:", err.message);
+  }
+
+  return `/api/proxy-image?url=${encodeURIComponent('https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?auto=format&fit=crop&w=800&q=80')}`;
+}
+
+/**
+ * Content Agent: Responsible for generating robust educational notes
+ * for the ENTIRE plan in a single batch call to save quota.
+ */
+async function generateFullContentBatch(topic, plan, style, genAI) {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  
+  const prompt = `You are a world-class technical educator. Your goal is to write a complete set of technical notes for "${topic}" based on this blueprint:
+
+${JSON.stringify(plan, null, 2)}
+
+Overall Style: ${style}
+
+STRICT OUTPUT RULES (CRITICAL):
+1. **NO CONVERSATIONAL FILLER**: Do not use words like "Welcome", "Hello", "In this section", "Let's dive in", or "Imagine". 
+2. **NO INTROS**: Start each section IMMEDIATELY with the facts, definitions, or code.
+3. **TONE**: Professional technical book style. Use analogies only to explain complex concepts, not to "frame" the guide as a story.
+4. **NO FIRST/SECOND PERSON**: Avoid "I", "We", "You" (unless in a clear 'Tutorial' step).
+5. **STRUCTURE**:
+    - For each section, use the provided Heading (##).
+    - If a section in the plan has "needsImage": true, insert the placeholder: [[IMAGE_QUERY: "QueryFromPlan"]] (Replace QueryFromPlan with the actual "imageQuery" from that section).
+    - Mermaid Diagrams: Include using strictly simple 'graph TD' or 'graph LR' syntax with labels in "double quotes".
+6. **FORMAT**: Clean Markdown. No intros, no conclusions, no greetings.`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
 }
 
 app.post("/api/generate", async (req, res) => {
@@ -67,27 +113,66 @@ app.post("/api/generate", async (req, res) => {
   }
 
   try {
-    // Initialize Gemini with the user's provided API key
     const genAI = new GoogleGenerativeAI(userApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    // 1. Run Planner Agent (Request #1)
+    const plan = await runPlannerAgent(topic.trim(), style || "detailed", genAI);
+    
+    // 2. Generate Full Content in Batch (Request #2)
+    let fullMarkdown = await generateFullContentBatch(topic.trim(), plan, style || "detailed", genAI);
 
-    const prompt = buildPrompt(topic.trim(), style || "detailed");
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const notes = response.text();
+    // 3. Process Image Placeholders
+    // Scan for [[IMAGE_QUERY: "..."]] and replace with Proxy URLs from Image Agent
+    const placeholderRegex = /\[\[IMAGE_QUERY:\s*"([^"]+)"\]\]/g;
+    const matches = [...fullMarkdown.matchAll(placeholderRegex)];
+    
+    if (matches.length > 0) {
+       const imageTasks = matches.map(match => fetchRelevantImage(match[1]));
+       const imageUrls = await Promise.all(imageTasks);
+       
+       let index = 0;
+       fullMarkdown = fullMarkdown.replace(placeholderRegex, () => {
+         const url = imageUrls[index++];
+         return `\n\n![Illustration](${url})\n<style>img { border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); margin: 20px 0; max-width: 100%; }</style>\n\n`;
+       });
+    }
 
-    res.json({ notes });
+    res.json({ notes: fullMarkdown });
   } catch (error) {
-    console.error("AI Generation Error:", error.message);
+    console.error("AI Generation / Orchestration Error:", error.message);
     
     let errorMessage = "Failed to generate notes. Please check your API key.";
-    if (error.message.includes("API_KEY_INVALID")) {
-      errorMessage = "Invalid Gemini API Key. Please provide a valid key from Google AI Studio.";
-    } else if (error.message.includes("quota")) {
-      errorMessage = "API Quota exceeded or key limited. Please try again later.";
+    if (error.message.includes("429") || error.message.includes("quota")) {
+      errorMessage = "API Quota exceeded for your key. (Limit is 20 requests/day). Please try again in 1 minute.";
+    } else if (error.message.includes("API_KEY_INVALID")) {
+      errorMessage = "Invalid Gemini API Key.";
     }
 
     res.status(500).json({ error: errorMessage });
+  }
+});
+
+/**
+ * Proxy route to fetch images server-side.
+ * Resolves frontend CORS tainting so html2pdf can render images natively.
+ */
+app.get("/api/proxy-image", async (req, res) => {
+  const imageUrl = req.query.url;
+  if (!imageUrl) return res.status(400).send("No URL provided");
+
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) throw new Error("Failed to fetch image");
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    res.setHeader("Content-Type", response.headers.get("content-type") || "image/jpeg");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(buffer);
+  } catch (err) {
+    console.error("Proxy error:", err.message);
+    res.status(500).send("Proxy error");
   }
 });
 
