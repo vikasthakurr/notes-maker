@@ -40,6 +40,10 @@
   <!-- Mermaid.js for diagrams -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 
+  <!-- Load JSZip first, then PptxGenJS -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="min-h-screen font-sans overflow-x-hidden transition-colors duration-400">
@@ -91,6 +95,16 @@
 
       <!-- Input Card -->
       <section class="glass-card max-w-2xl mx-auto p-6 sm:p-8 mb-8">
+        <!-- App Mode Toggle -->
+        <div class="flex p-1 bg-surface-800/60 rounded-xl mb-6 border border-primary-500/10">
+          <button type="button" id="modeNotesBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-primary-500 text-white shadow-md transition-all">
+            Notes Maker
+          </button>
+          <button type="button" id="modeSlidesBtn" class="flex-1 py-2.5 rounded-lg text-sm font-medium opacity-60 hover:opacity-100 transition-all">
+            Presentation Maker
+          </button>
+        </div>
+
         <form id="generateForm" class="space-y-6">
           <!-- API Key -->
           <div class="mb-6 pb-6 border-b border-primary-500/10">
@@ -129,8 +143,8 @@
             />
           </div>
 
-          <!-- Style Selector -->
-          <div>
+          <!-- Style Selector (Hidden in Presentation Mode) -->
+          <div id="styleSelectorContainer">
             <label class="block text-sm font-semibold opacity-80 mb-2">Style</label>
             <div class="grid grid-cols-3 gap-3" id="styleSelector">
               <button type="button" data-style="detailed" class="style-btn active">
@@ -155,7 +169,7 @@
             class="w-full py-4 rounded-xl theme-btn-primary font-bold text-sm hover:shadow-lg active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-            Generate Notes
+            <span id="generateBtnText">Generate Notes</span>
           </button>
         </form>
       </section>
@@ -163,7 +177,7 @@
       <!-- Loading State -->
       <section id="loadingState" class="hidden max-w-2xl mx-auto text-center py-16">
         <div class="loader mx-auto mb-6"></div>
-        <p class="opacity-70 text-sm animate-pulse font-medium">Forging your technical notes...</p>
+        <p class="opacity-70 text-sm animate-pulse font-medium" id="loadingText">Forging your technical notes...</p>
         <p class="opacity-40 text-xs mt-2" id="loadingTopic"></p>
       </section>
 
@@ -194,12 +208,21 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
               DOCX
             </button>
+            <button id="exportPptxBtn" class="export-btn hidden">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              Download PPTX
+            </button>
           </div>
         </div>
 
         <!-- Notes Preview -->
-        <div class="glass-card max-w-4xl mx-auto p-6 sm:p-12">
+        <div id="notesContainer" class="glass-card max-w-4xl mx-auto p-6 sm:p-12">
           <article id="notesContent" class="prose-custom"></article>
+        </div>
+
+        <!-- Slides Preview (Hidden by default) -->
+        <div id="slidesContainer" class="max-w-4xl mx-auto hidden">
+          <div id="slidesContent" class="grid gap-6"></div>
         </div>
 
         <!-- Generate Another -->

@@ -1,10 +1,16 @@
 // ==================== State ====================
+let appMode = "notes"; // "notes" | "slides"
 let currentMarkdown = "";
+let currentSlides = null; // Stores JSON array of slides
 let currentTopic = "";
 let selectedStyle = "detailed";
 
 // ==================== DOM Elements ====================
 const generateForm = document.getElementById("generateForm");
+const modeNotesBtn = document.getElementById("modeNotesBtn");
+const modeSlidesBtn = document.getElementById("modeSlidesBtn");
+const styleSelectorContainer = document.getElementById("styleSelectorContainer");
+const generateBtnText = document.getElementById("generateBtnText");
 const topicInput = document.getElementById("topicInput");
 const apiKeyInput = document.getElementById("apiKeyInput");
 const toggleApiKeyBtn = document.getElementById("toggleApiKey");
@@ -14,14 +20,19 @@ const sunIcon = document.getElementById("sunIcon");
 const moonIcon = document.getElementById("moonIcon");
 const generateBtn = document.getElementById("generateBtn");
 const loadingState = document.getElementById("loadingState");
+const loadingText = document.getElementById("loadingText");
 const loadingTopic = document.getElementById("loadingTopic");
 const errorState = document.getElementById("errorState");
 const errorMessage = document.getElementById("errorMessage");
 const resultSection = document.getElementById("resultSection");
 const resultTitle = document.getElementById("resultTitle");
+const notesContainer = document.getElementById("notesContainer");
 const notesContent = document.getElementById("notesContent");
+const slidesContainer = document.getElementById("slidesContainer");
+const slidesContent = document.getElementById("slidesContent");
 const exportPdfBtn = document.getElementById("exportPdfBtn");
 const exportDocxBtn = document.getElementById("exportDocxBtn");
+const exportPptxBtn = document.getElementById("exportPptxBtn");
 const styleBtns = document.querySelectorAll(".style-btn");
 
 // ==================== Theme Handling ====================
@@ -67,6 +78,33 @@ toggleApiKeyBtn.addEventListener("click", () => {
     eyeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>`;
   }
 });
+
+// ==================== App Mode Toggle ====================
+function setAppMode(mode) {
+  appMode = mode;
+  if (mode === "notes") {
+    modeNotesBtn.classList.replace("opacity-60", "bg-primary-500");
+    modeNotesBtn.classList.replace("hover:opacity-100", "text-white");
+    modeSlidesBtn.classList.replace("bg-primary-500", "opacity-60");
+    modeSlidesBtn.classList.replace("text-white", "hover:opacity-100");
+    
+    styleSelectorContainer.classList.remove("hidden");
+    generateBtnText.textContent = "Generate Notes";
+    loadingText.textContent = "Forging your technical notes...";
+  } else {
+    modeSlidesBtn.classList.replace("opacity-60", "bg-primary-500");
+    modeSlidesBtn.classList.replace("hover:opacity-100", "text-white");
+    modeNotesBtn.classList.replace("bg-primary-500", "opacity-60");
+    modeNotesBtn.classList.replace("text-white", "hover:opacity-100");
+    
+    styleSelectorContainer.classList.add("hidden");
+    generateBtnText.textContent = "Generate Presentation";
+    loadingText.textContent = "Designing your presentation slides...";
+  }
+}
+
+modeNotesBtn.addEventListener("click", () => setAppMode("notes"));
+modeSlidesBtn.addEventListener("click", () => setAppMode("slides"));
 
 // ==================== Style Selector ====================
 styleBtns.forEach((btn) => {
@@ -143,23 +181,31 @@ generateForm.addEventListener("submit", async (e) => {
   showLoading(topic);
 
   try {
-    const res = await fetch("/api/generate", {
+    const endpoint = appMode === "notes" ? "/api/generate" : "/api/generate-slides";
+    const bodyPayload = appMode === "notes" ? { topic, style: selectedStyle } : { topic };
+
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { 
         "Content-Type": "application/json",
         "X-API-Key": apiKey
       },
-      body: JSON.stringify({ topic, style: selectedStyle }),
+      body: JSON.stringify(bodyPayload),
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || "Failed to generate notes");
+      throw new Error(data.error || "Failed to generate content");
     }
 
-    currentMarkdown = data.notes;
-    renderNotes(data.notes, topic);
+    if (appMode === "notes") {
+      currentMarkdown = data.notes;
+      renderNotes(data.notes, topic);
+    } else {
+      currentSlides = data;
+      renderSlides(data, topic);
+    }
   } catch (err) {
     showError(err.message);
   }
@@ -185,7 +231,7 @@ async function renderNotes(markdown, topic) {
   for (let i = 0; i < mermaidBlocks.length; i++) {
     const block = mermaidBlocks[i];
     const pre = block.parentElement;
-    const code = block.textContent;
+    const code = sanitizeMermaid(block.textContent);
     const id = `mermaid-diagram-${i}`;
 
     const diagramDiv = document.createElement("div");
@@ -236,11 +282,331 @@ async function renderNotes(markdown, topic) {
   });
 
   resultTitle.textContent = topic;
+  notesContainer.classList.remove("hidden");
+  slidesContainer.classList.add("hidden");
+  exportPdfBtn.classList.remove("hidden");
+  exportDocxBtn.classList.remove("hidden");
+  exportPptxBtn.classList.add("hidden");
+  
   hideLoading();
   resultSection.classList.remove("hidden");
 
   // Smooth scroll to result
   resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ==================== Render Slides ====================
+// ==================== Slideshow State ====================
+let currentSlideIndex = 0;
+let presentationData = null;
+
+function renderSlides(slidesJson, topic) {
+  presentationData = slidesJson;
+  const slides = slidesJson.slides || slidesJson;
+  currentSlideIndex = 0;
+
+  // Build the full Gamma-like viewer
+  slidesContent.innerHTML = `
+    <div id="slideViewer" class="slide-viewer">
+      <!-- Sidebar thumbnails -->
+      <div id="slideSidebar" class="slide-sidebar">
+        <div class="sidebar-header">
+          <span class="text-[10px] uppercase tracking-widest font-bold opacity-40">Slides</span>
+          <span id="slideCounter" class="text-[10px] font-bold opacity-40">1 / ${slides.length}</span>
+        </div>
+        <div id="thumbnailList" class="thumbnail-list"></div>
+      </div>
+
+      <!-- Main slide canvas -->
+      <div class="slide-main">
+        <div id="slideCanvas" class="slide-canvas"></div>
+
+        <!-- Navigation -->
+        <div class="slide-nav">
+          <button id="prevSlide" class="slide-nav-btn" title="Previous (←)">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <span id="slideNavLabel" class="text-xs font-semibold opacity-50"></span>
+          <button id="nextSlide" class="slide-nav-btn" title="Next (→)">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <button id="fullscreenBtn" class="slide-nav-btn ml-2" title="Fullscreen (F)">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+          </button>
+        </div>
+
+        <!-- Speaker notes panel -->
+        <div id="speakerNotesPanel" class="speaker-notes-panel hidden">
+          <span class="text-[10px] uppercase tracking-widest font-bold opacity-40 mb-1 block">Speaker Notes</span>
+          <p id="speakerNotesText" class="text-sm opacity-70 italic leading-relaxed"></p>
+        </div>
+        <button id="toggleNotes" class="toggle-notes-btn">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h6m-6 4h10M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>
+          Notes
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Build thumbnails
+  const thumbnailList = document.getElementById("thumbnailList");
+  slides.forEach((slide, i) => {
+    const thumb = document.createElement("div");
+    thumb.className = `slide-thumb ${i === 0 ? "active" : ""}`;
+    thumb.dataset.index = i;
+    thumb.innerHTML = `
+      <div class="thumb-number">${i + 1}</div>
+      <div class="thumb-title">${slide.title || ""}</div>
+      <div class="thumb-type">${slide.type || "content"}</div>
+    `;
+    thumb.addEventListener("click", () => goToSlide(i));
+    thumbnailList.appendChild(thumb);
+  });
+
+  // Wire up navigation
+  document.getElementById("prevSlide").addEventListener("click", () => goToSlide(currentSlideIndex - 1));
+  document.getElementById("nextSlide").addEventListener("click", () => goToSlide(currentSlideIndex + 1));
+  document.getElementById("fullscreenBtn").addEventListener("click", toggleFullscreen);
+  document.getElementById("toggleNotes").addEventListener("click", () => {
+    document.getElementById("speakerNotesPanel").classList.toggle("hidden");
+  });
+
+  // Keyboard navigation
+  document.addEventListener("keydown", handleSlideKeydown);
+
+  goToSlide(0);
+
+  resultTitle.textContent = `${topic}`;
+  notesContainer.classList.add("hidden");
+  slidesContainer.classList.remove("hidden");
+  exportPdfBtn.classList.add("hidden");
+  exportDocxBtn.classList.add("hidden");
+  exportPptxBtn.classList.remove("hidden");
+
+  hideLoading();
+  resultSection.classList.remove("hidden");
+  resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleSlideKeydown(e) {
+  if (!presentationData) return;
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") goToSlide(currentSlideIndex + 1);
+  if (e.key === "ArrowLeft" || e.key === "ArrowUp") goToSlide(currentSlideIndex - 1);
+  if (e.key === "f" || e.key === "F") toggleFullscreen();
+}
+
+function goToSlide(index) {
+  const slides = presentationData.slides || presentationData;
+  if (index < 0 || index >= slides.length) return;
+  currentSlideIndex = index;
+  const slide = slides[index];
+
+  // Update canvas
+  const canvas = document.getElementById("slideCanvas");
+  canvas.innerHTML = buildSlideHTML(slide, index, slides.length);
+
+  // Update thumbnails
+  document.querySelectorAll(".slide-thumb").forEach((t, i) => {
+    t.classList.toggle("active", i === index);
+    if (i === index) t.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+
+  // Update counter & nav label
+  document.getElementById("slideCounter").textContent = `${index + 1} / ${slides.length}`;
+  document.getElementById("slideNavLabel").textContent = `${index + 1} of ${slides.length}`;
+  document.getElementById("prevSlide").disabled = index === 0;
+  document.getElementById("nextSlide").disabled = index === slides.length - 1;
+
+  // Speaker notes
+  const notesText = document.getElementById("speakerNotesText");
+  if (notesText) notesText.textContent = slide.speakerNotes || "No speaker notes for this slide.";
+}
+
+function buildSlideHTML(slide, index, total) {
+  const accent = slide.accent || "#6c63ff";
+  const type = slide.type || "content";
+  const imgUrl = slide.imageQuery
+    ? `https://source.unsplash.com/800x600/?${encodeURIComponent(slide.imageQuery)}`
+    : null;
+
+  const progress = Math.round(((index + 1) / total) * 100);
+  const progressBar = `<div class="slide-progress"><div class="slide-progress-fill" style="width:${progress}%;background:${accent}"></div></div>`;
+
+  // Reusable code panel builder — detects language from first-line comment
+  function codePanel(code) {
+    const firstLine = (code || "").split("\n")[0];
+    const langMatch = firstLine.match(/(?:\/\/|#|<!--)\s*(\w+)/);
+    const lang = langMatch ? langMatch[1] : "code";
+    // Strip the language comment line from display
+    const displayCode = code.replace(/^.*\n/, "");
+    return `
+      <div class="slide-code-panel">
+        <div class="code-panel-header" style="border-color:${accent}33">
+          <span class="code-dot" style="background:#ff5f57"></span>
+          <span class="code-dot" style="background:#febc2e"></span>
+          <span class="code-dot" style="background:#28c840"></span>
+          <span class="code-lang-tag" style="color:${accent}">${lang}</span>
+        </div>
+        <pre><code class="language-${lang}">${escapeHtml(displayCode.trim())}</code></pre>
+      </div>`;
+  }
+
+  if (type === "title") {
+    return `
+      <div class="slide-inner slide-title-type" style="--accent:${accent}">
+        ${progressBar}
+        <div class="slide-title-bg-orb orb1" style="background:${accent}"></div>
+        <div class="slide-title-bg-orb orb2" style="background:${accent}"></div>
+        <div class="slide-title-content">
+          <div class="slide-title-badge" style="color:${accent};border-color:${accent}22;background:${accent}11">
+            <span class="badge-dot" style="background:${accent}"></span>Presentation
+          </div>
+          <h1 class="slide-title-heading">${slide.title}</h1>
+          ${slide.subtitle ? `<p class="slide-subtitle">${slide.subtitle}</p>` : ""}
+          ${slide.tagline ? `<p class="slide-tagline" style="color:${accent}">"${slide.tagline}"</p>` : ""}
+          <div class="slide-title-bar" style="background:linear-gradient(90deg,${accent},transparent)"></div>
+        </div>
+        ${imgUrl ? `
+        <div class="slide-title-image">
+          <div class="slide-img-frame" style="border-color:${accent}33">
+            <img src="${imgUrl}" alt="${slide.title}" loading="lazy" />
+            <div class="slide-img-overlay" style="background:linear-gradient(to right,#0a0a18 0%,transparent 40%)"></div>
+          </div>
+        </div>` : ""}
+      </div>`;
+  }
+
+  if (type === "section") {
+    return `
+      <div class="slide-inner slide-section-type" style="--accent:${accent}">
+        ${progressBar}
+        <div class="section-accent-bar" style="background:linear-gradient(180deg,${accent},${accent}44)"></div>
+        ${imgUrl ? `
+        <div class="section-bg-image">
+          <img src="${imgUrl}" alt="${slide.title}" loading="lazy" />
+          <div class="section-bg-overlay" style="background:linear-gradient(to right,#080814 45%,rgba(8,8,20,0.7) 100%)"></div>
+        </div>` : ""}
+        <div class="section-content">
+          <div class="slide-section-number" style="color:${accent}">${String(index + 1).padStart(2, "0")}</div>
+          <h2 class="slide-section-heading">${slide.title}</h2>
+          ${slide.subtitle ? `<p class="slide-section-sub">${slide.subtitle}</p>` : ""}
+          <div class="section-line" style="background:${accent}"></div>
+        </div>
+      </div>`;
+  }
+
+  if (type === "quote") {
+    return `
+      <div class="slide-inner slide-quote-type" style="--accent:${accent}">
+        ${progressBar}
+        ${imgUrl ? `
+        <div class="quote-bg-image">
+          <img src="${imgUrl}" alt="quote visual" loading="lazy" />
+          <div class="quote-bg-overlay"></div>
+        </div>` : ""}
+        <div class="quote-content">
+          <div class="slide-quote-mark" style="color:${accent}">"</div>
+          <blockquote class="slide-quote-text">${slide.quote || slide.title}</blockquote>
+          ${slide.author ? `<cite class="slide-quote-author" style="color:${accent}">— ${slide.author}</cite>` : ""}
+        </div>
+      </div>`;
+  }
+
+  if (type === "conclusion") {
+    const bullets = slide.bullets || [];
+    return `
+      <div class="slide-inner slide-conclusion-type" style="--accent:${accent}">
+        ${progressBar}
+        <div class="conclusion-orb" style="background:${accent}"></div>
+        <div class="slide-eyebrow" style="color:${accent}">Key Takeaways</div>
+        <h2 class="slide-content-title">${slide.title}</h2>
+        <ul class="slide-bullets conclusion-bullets">
+          ${bullets.map((b, i) => `
+            <li style="animation-delay:${i * 0.08}s">
+              <span class="bullet-num" style="background:${accent}22;color:${accent}">${i + 1}</span>
+              ${b}
+            </li>`).join("")}
+        </ul>
+        ${slide.cta ? `<div class="slide-cta" style="background:${accent};box-shadow:0 8px 24px ${accent}44">${slide.cta} →</div>` : ""}
+      </div>`;
+  }
+
+  // ---- "code" type: full-focus code slide ----
+  if (type === "code") {
+    const annotations = slide.bullets || [];
+    return `
+      <div class="slide-inner slide-code-focus-type" style="--accent:${accent}">
+        ${progressBar}
+        <div class="content-top-bar" style="background:linear-gradient(90deg,${accent},${accent}44,transparent)"></div>
+        <div class="code-focus-left">
+          <div class="slide-eyebrow" style="color:${accent}">
+            <span class="eyebrow-line" style="background:${accent}"></span>Code
+          </div>
+          <h2 class="slide-content-title">${slide.title}</h2>
+          ${annotations.length ? `
+          <ul class="slide-bullets code-annotations">
+            ${annotations.map((b, i) => `
+              <li style="animation-delay:${i * 0.07}s">
+                <span class="bullet-icon" style="background:${accent}22;color:${accent}">
+                  <svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="${accent}"/></svg>
+                </span>${b}
+              </li>`).join("")}
+          </ul>` : ""}
+        </div>
+        <div class="code-focus-right">
+          ${slide.code ? codePanel(slide.code) : ""}
+        </div>
+      </div>`;
+  }
+
+  // ---- agenda / content ----
+  const bullets = slide.bullets || [];
+  const hasCode = !!slide.code;
+  const hasImage = !hasCode && !!imgUrl;
+
+  return `
+    <div class="slide-inner slide-content-type" style="--accent:${accent}">
+      ${progressBar}
+      <div class="content-top-bar" style="background:linear-gradient(90deg,${accent},${accent}44,transparent)"></div>
+      <div class="slide-content-left">
+        <div class="slide-eyebrow" style="color:${accent}">
+          <span class="eyebrow-line" style="background:${accent}"></span>
+          ${type === "agenda" ? "Agenda" : `Slide ${index + 1}`}
+        </div>
+        <h2 class="slide-content-title">${slide.title}</h2>
+        <ul class="slide-bullets">
+          ${bullets.map((b, i) => `
+            <li style="animation-delay:${i * 0.07}s">
+              <span class="bullet-icon" style="background:${accent}22;color:${accent}">
+                ${type === "agenda"
+                  ? `<span class="agenda-num">${i + 1}</span>`
+                  : `<svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="${accent}"/></svg>`}
+              </span>
+              ${b}
+            </li>`).join("")}
+        </ul>
+      </div>
+      ${hasCode ? codePanel(slide.code) : ""}
+      ${hasImage ? `
+      <div class="slide-image-panel">
+        <img src="${imgUrl}" alt="${slide.title}" loading="lazy" />
+        <div class="slide-image-glow" style="background:${accent}"></div>
+      </div>` : ""}
+    </div>`;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function toggleFullscreen() {
+  const viewer = document.getElementById("slideViewer");
+  if (!viewer) return;
+  if (!document.fullscreenElement) {
+    viewer.requestFullscreen && viewer.requestFullscreen();
+  } else {
+    document.exitFullscreen && document.exitFullscreen();
+  }
 }
 
 // ==================== Export: PDF (client-side via html2pdf.js) ====================
@@ -341,6 +707,127 @@ exportDocxBtn.addEventListener("click", async () => {
   }
 });
 
+// ==================== Export: PPTX (client-side via PptxGenJS) ====================
+exportPptxBtn.addEventListener("click", async () => {
+  if (!presentationData) return;
+  const slides = presentationData.slides || presentationData;
+
+  exportPptxBtn.disabled = true;
+  const originalText = exportPptxBtn.innerHTML;
+  exportPptxBtn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Generating PPTX...`;
+
+  try {
+    const pptx = new PptxGenJS();
+    pptx.author = "NoteForge AI";
+    pptx.subject = currentTopic;
+    pptx.title = currentTopic;
+    pptx.layout = "LAYOUT_WIDE";
+
+    slides.forEach((slideData) => {
+      const slide = pptx.addSlide();
+      const accent = (slideData.accent || "#6c63ff").replace("#", "");
+      const type = slideData.type || "content";
+
+      // Dark background for all slides
+      slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: "100%", fill: { color: "0f0f1e" } });
+
+      if (type === "title") {
+        // Accent bar top
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 0.08, fill: { color: accent } });
+        slide.addText(slideData.title || "", {
+          x: 0.8, y: 1.5, w: "85%", h: 1.5,
+          fontSize: 44, bold: true, color: "FFFFFF", align: "center"
+        });
+        if (slideData.subtitle) {
+          slide.addText(slideData.subtitle, {
+            x: 0.8, y: 3.2, w: "85%", h: 0.8,
+            fontSize: 22, color: "AAAACC", align: "center"
+          });
+        }
+        if (slideData.tagline) {
+          slide.addText(`"${slideData.tagline}"`, {
+            x: 0.8, y: 4.2, w: "85%", h: 0.6,
+            fontSize: 16, color: accent, italic: true, align: "center"
+          });
+        }
+        slide.addText("NoteForge AI", {
+          x: 0.3, y: 6.8, w: 2, h: 0.3, fontSize: 10, color: "555577"
+        });
+
+      } else if (type === "section") {
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: "100%", fill: { color: accent } });
+        slide.addText(`0${slides.indexOf(slideData) + 1}`, {
+          x: 0.5, y: 1.0, w: 2, h: 1.2, fontSize: 72, bold: true, color: accent, transparency: 60
+        });
+        slide.addText(slideData.title || "", {
+          x: 0.5, y: 2.4, w: "88%", h: 1.2, fontSize: 40, bold: true, color: "FFFFFF"
+        });
+        if (slideData.subtitle) {
+          slide.addText(slideData.subtitle, {
+            x: 0.5, y: 3.8, w: "88%", h: 0.7, fontSize: 20, color: "AAAACC"
+          });
+        }
+
+      } else if (type === "quote") {
+        slide.addText("\u201C", {
+          x: 0.5, y: 0.3, w: 2, h: 1.5, fontSize: 120, bold: true, color: accent, transparency: 40
+        });
+        slide.addText(slideData.quote || slideData.title || "", {
+          x: 0.8, y: 1.5, w: "85%", h: 2.5,
+          fontSize: 28, italic: true, color: "DDDDEE", align: "center", valign: "middle"
+        });
+        if (slideData.author) {
+          slide.addText(`\u2014 ${slideData.author}`, {
+            x: 0.8, y: 4.3, w: "85%", h: 0.5, fontSize: 16, color: accent, align: "center"
+          });
+        }
+
+      } else {
+        // content / agenda / conclusion
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 0.06, fill: { color: accent } });
+        slide.addText(slideData.title || "", {
+          x: 0.5, y: 0.4, w: "90%", h: 0.9, fontSize: 32, bold: true, color: "FFFFFF"
+        });
+
+        if (slideData.bullets && slideData.bullets.length > 0) {
+          const bulletRows = slideData.bullets.map(b => ({
+            text: b, options: { bullet: { type: "bullet" }, color: "CCCCDD", fontSize: 18, breakLine: true }
+          }));
+          slide.addText(bulletRows, {
+            x: 0.5, y: 1.5, w: slideData.code ? "48%" : "90%", h: 4.5, valign: "top"
+          });
+        }
+
+        if (slideData.code) {
+          slide.addShape(pptx.ShapeType.rect, {
+            x: 5.3, y: 1.4, w: 4.5, h: 4.6, fill: { color: "1e1e2e" }, line: { color: accent, width: 1 }
+          });
+          slide.addText(slideData.code, {
+            x: 5.5, y: 1.6, w: 4.1, h: 4.2,
+            fontSize: 11, fontFace: "Courier New", color: "CDD6F4", valign: "top"
+          });
+        }
+
+        if (slideData.cta) {
+          slide.addText(slideData.cta, {
+            x: 0.5, y: 6.0, w: "90%", h: 0.6,
+            fontSize: 16, bold: true, color: accent, align: "center"
+          });
+        }
+      }
+
+      if (slideData.speakerNotes) slide.addNotes(slideData.speakerNotes);
+    });
+
+    await pptx.writeFile({ fileName: `${sanitizeName(currentTopic)}.pptx` });
+  } catch (err) {
+    showError("PPTX export failed: " + err.message);
+  } finally {
+    exportPptxBtn.innerHTML = originalText;
+    exportPptxBtn.disabled = false;
+  }
+});
+
 // ==================== Helpers ====================
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -355,6 +842,24 @@ function downloadBlob(blob, filename) {
 
 function sanitizeName(name) {
   return name.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "_").substring(0, 50);
+}
+
+// Auto-quote unquoted Mermaid node labels that contain special characters
+function sanitizeMermaid(code) {
+  // Match node labels like: A[some label] or A(some label) or A{some label}
+  // If the label contains special chars and isn't already quoted, wrap it
+  return code.replace(
+    /(\w+)([\[\(\{])([^"'\]\)\}]+)([\]\)\}])/g,
+    (match, id, open, label, close) => {
+      const specialChars = /[().,;\-\/\%\#\&\']/;
+      if (specialChars.test(label)) {
+        // Use the double-quote form Mermaid supports: A["label"]
+        const safeLabel = label.replace(/"/g, "'");
+        return `${id}${open}"${safeLabel}"${close}`;
+      }
+      return match;
+    }
+  );
 }
 
 function showLoading(topic) {
@@ -389,6 +894,9 @@ function resetUI() {
   topicInput.value = "";
   topicInput.focus();
   currentMarkdown = "";
+  currentSlides = null;
+  presentationData = null;
   currentTopic = "";
+  document.removeEventListener("keydown", handleSlideKeydown);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
