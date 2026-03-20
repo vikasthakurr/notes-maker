@@ -1,0 +1,18 @@
+{
+  "name": "notes-maker",
+  "version": "1.0.0",
+  "description": "AI-powered technical notes generator using Gemini",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "googlethis": "^1.8.0",
+    "html-docx-js": "^0.3.1"
+  }
+}
