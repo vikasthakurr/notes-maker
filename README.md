@@ -1,254 +1,66 @@
-# 🌌 NoteForge AI: The Intelligent Technical Orchestrator
+# notes-maker
 
-[![Release](https://img.shields.io/badge/Release-Early%20Access-8b5cf6?style=for-the-badge)](https://github.com/vikasthakurr/notes-maker)
-[![Engine](https://img.shields.io/badge/Engine-Gemini%202.5%20Flash-blue?style=for-the-badge\&logo=google-gemini)](https://aistudio.google.com/app/apikey)
-[![Tech](https://img.shields.io/badge/Node.js-339933?style=for-the-badge\&logo=nodedotjs\&logoColor=white)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
 
-> **NoteForge AI** is an intelligent technical workspace built for modern software developers, data scientists, and technical leaders.
+![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg?style=flat-square) 
+![GitHub stars](https://img.shields.io/github/stars/vikasthakurr/notes-maker?style=flat-square) 
+![GitHub forks](https://img.shields.io/github/forks/vikasthakurr/notes-maker?style=flat-square)
 
-Powered by **Multi-Agent Orchestration (MAO)**, NoteForge transforms complex technical topics into high-quality technical guides and polished presentation decks with structured explanations, code examples, diagrams, analogies, and visual context.
+## 📌 Overview
 
-**[Explore Features](#key-capabilities)** · **[Installation](#quick-start)** · **[Architecture](#multi-agent-orchestration)** · **[Export Hub](#universal-export-hub)**
+Modern, responsive sticky notes and rich-text note management web application built with React.
 
----
+**Tags:** `#react` `#notes-app` `#productivity` `#javascript` `#frontend`
 
-## 🚀 Key Capabilities
+## 🚀 Key Highlights & Concepts
 
-### 🧬 Semantic Contextualization
+- **Structured Curriculum:** Step-by-step breakdown from foundational mechanics to advanced production patterns.
+- **Real-World Engineering:** Deep-dive explanations, edge cases, and industry-standard best practices.
+- **Interview Readiness:** Comprehensive questions, code snippets, and architectural trade-off evaluations.
 
-Generate technical content that balances deep implementation details with high-level explanations.
+## 🛠️ Getting Started
 
-NoteForge can produce:
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v16+ or v18+ recommended)
+- Modern Web Browser (Chrome, Firefox, Safari)
+- Git installed on your system
 
-* Code examples
-* Technical explanations
-* Architecture concepts
-* Diagrams and visual descriptions
-* ELI5 explanations
-* Real-world analogies
-* Structured learning notes
-* Developer-focused documentation
+### Installation
 
-### 🎨 Elite Presentation Mode
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/vikasthakurr/notes-maker.git
+   cd notes-maker
+   ```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+3. **Run the development server / application:**
+   ```bash
+   npm run dev # or npm start
+   ```
 
-Turn technical topics into polished, presentation-ready slide decks.
-
-The presentation engine focuses on:
-
-* Logical slide progression
-* Visual pacing
-* Technical accuracy
-* Concise explanations
-* Code snippets
-* Architecture diagrams
-* Developer-focused examples
-
-### 🖼️ Real-Time Intelligence Integration
-
-Specialized agents can retrieve relevant visual resources from external image sources such as Google Search and Unsplash.
-
-These resources are processed and integrated into generated technical content to provide additional visual context.
-
-### 💎 Premium Design System
-
-NoteForge features a modern dark interface designed around:
-
-* Glassmorphism
-* Smooth transitions
-* Responsive layouts
-* Low-latency interactions
-* Developer-focused UX
-
----
-
-## 🧠 Multi-Agent Orchestration
-
-NoteForge uses a specialized agentic pipeline to generate high-quality technical content.
-
-### 1. The Planner
-
-**Role:** Architect
-
-The Planner creates the structural blueprint for the requested content.
-
-It determines:
-
-* Topic hierarchy
-* Logical sequence
-* Required sections
-* Technical depth
-* Examples to include
-* Presentation structure
-
-### 2. The Content Agent
-
-**Role:** Synthesizer
-
-The Content Agent populates the blueprint with technical information.
-
-It focuses on:
-
-* Precise explanations
-* Code examples
-* Technical terminology
-* Real-world analogies
-* Step-by-step explanations
-* Developer-friendly language
-
-### 3. The Image Agent
-
-**Role:** Illustrator
-
-The Image Agent identifies and retrieves relevant visual resources.
-
-It handles:
-
-* Technical illustrations
-* Reference images
-* Visual context
-* Image proxying
-* CORS-related image loading issues
-
-### Agent Pipeline
-
+## 📂 Repository Structure
 ```text
-User Prompt
-     │
-     ▼
-┌─────────────┐
-│   Planner   │
-│  Architect  │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│   Content   │
-│   Agent     │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│    Image    │
-│    Agent    │
-└──────┬──────┘
-       │
-       ▼
-┌──────────────────┐
-│ Final Technical  │
-│     Output       │
-└──────────────────┘
+notes-maker/
+├── .gitignore
+├── README.md
+├── package-lock.json
+├── package.json
+├── public
+├── server.js
 ```
 
 ---
 
-## 📤 Universal Export Hub
+## 👨‍💻 Author
 
-Export generated content into multiple industry-standard formats.
+**Vikas Thakur**  
+- **LinkedIn:** [@vikasthakurr](https://www.linkedin.com/in/vikasthakurr)  
+- **Twitter / X:** [@vikasthaakurr](https://twitter.com/vikasthaakurr)  
+- **GitHub:** [@vikasthakurr](https://github.com/vikasthakurr)  
 
-| Format                 | Technology     | Purpose                       |
-| ---------------------- | -------------- | ----------------------------- |
-| **PDF**                | `html2pdf.js`  | Professional technical guides |
-| **Word (.docx)**       | `html-docx-js` | Editable documentation        |
-| **PowerPoint (.pptx)** | `PptxGenJS`    | Technical presentations       |
-| **Markdown (.md)**     | Standard GFM   | Developer workflows           |
-
----
-
-## 🛠️ Quick Start
-
-### Requirements
-
-Before getting started, make sure you have:
-
-* **Node.js** v18.0.0 or later
-* A **Gemini API key**
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/vikasthakurr/notes-maker.git
-```
-
-### 2. Navigate to the Project
-
-```bash
-cd notes-maker
-```
-
-### 3. Install Dependencies
-
-```bash
-npm install
-```
-
-### 4. Configure Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-PORT=3000
-```
-
-You can get your Gemini API key from:
-
-https://aistudio.google.com/app/apikey
-
-### 5. Start the Application
-
-```bash
-npm start
-```
-
-The application will be available at:
-
-```text
-http://localhost:3000
-```
-
----
-
-## 🏗️ Technology Stack
-
-| Technology           | Purpose                  |
-| -------------------- | ------------------------ |
-| **Node.js**          | Backend runtime          |
-| **Gemini 2.5 Flash** | AI content generation    |
-| **JavaScript**       | Application logic        |
-| **html2pdf.js**      | PDF generation           |
-| **html-docx-js**     | Word document generation |
-| **PptxGenJS**        | PowerPoint generation    |
-| **Markdown / GFM**   | Developer documentation  |
-
----
-
-## 🤝 Collaborative Engineering
-
-Developed by:
-
-* **[Vikas Thakur](https://github.com/vikasthakurr)**
-  *Software Architect & Technical Visionary*
-
-* **[Jayan Gupta](https://github.com/JayanGupta)**
-  *Data Scientist & Optimization Strategist*
-
-Contributions are welcome. If you have ideas, improvements, or technical enhancements, feel free to open an issue or submit a pull request.
-
----
-
-## 📌 Project Status
-
-**Release:** Early Access
-
-NoteForge AI is actively evolving. New capabilities, agents, export formats, and developer-focused workflows are being added over time.
-
----
-
-<p align="center">
-
-**NoteForge AI**
-
-*Build. Learn. Document. Present.*
-
-</p>
+⭐ *If you find this repository helpful or educational, feel free to give it a star!*
